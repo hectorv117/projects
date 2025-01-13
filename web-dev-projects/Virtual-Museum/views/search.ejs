@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>Virtual Museum</title>
+
+
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+<link rel="stylesheet" href="CSS/styles.css">
+
+
+  </head>
+  <body>
+
+
+<div class="jumbotron jumbotron-fluid">
+  <div class="container">
+    <h1 class="display-4">Search through the <span id="met"> MET </span> Museum</h1>
+    <!-- <p class="lead">This is a modified jumbotron that <oc></oc>cupies the entire horizontal space of its parent.</p> -->
+    <form class="" action="/" method="post">
+    <div class="input-group mb-3">
+
+      <input id="searchbox" type="text" class="form-control" placeholder="search"  name = "searchbar" aria-describedby="basic-addon2">
+      <div class="input-group-append">
+        <button class="btn btn-outline-secondary" type="submit">Search</button>
+      </div>
+
+    </div>
+        </form>
+  </div>
+</div>
+
+<!-- display each artwork object as a bootstrap card -->
+
+<div class="row">
+
+<% arr.forEach(function(imgz){ %>
+
+  <div class="col col-lg-4">
+
+    <div class="card" style="width: 22rem;">
+      <input type="image" src=" <%= imgz.link %>" class="card-img-top img" data-toggle="modal" data-target="#exampleModal">
+      <div class="card-body">
+        <p class="card-text"> <%= imgz.title %> <br> <hr><%= imgz.artist %>   <%= imgz.date %></p>
+
+      </div>
+    </div>
+  </div>
+
+
+ <!-- bootstrap image modal that displays a clearer and more accurately shaped picture of the artwork that is clicked on -->
+  <div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+
+        <div class="modal-body">
+          </button>
+          <img  id = "pop" src= "<%= imgz.link %>" alt="">
+        </div>
+      </div>
+    </div>
+  </div>
+
+<%  }) %>
+</div>
+
+
+
+
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+
+<script type="text/javascript">
+//set the img src in the image modal to the img src of the artwork that is clicked on
+$('.img').on('click', function(){
+    document.getElementById("pop").src = $(this).attr('src');
+  });
+  //if this there was an error with the users search query prompt user to try again
+  if(<%= error %>){
+    document.getElementById("searchbox").placeholder = "No results, try again";
+  }// if there was no error keep the search box placeholder as the query the user entered
+  else{
+    document.getElementById("searchbox").placeholder = "<%= query %>";
+  }
+//change color of "MET"
+let arrayOfColors = ["#FFC900", "#EC255A", "#7900FF", "#35858B" ];
+let color = arrayOfColors[Math.floor(Math.random() * arrayOfColors.length)];
+document.getElementById("met").style.color = color;
+
+</script>
+
+
+
+
+  </body>
+
+
+</html>

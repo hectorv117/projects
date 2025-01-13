@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+starButton {
+   background-color: transparent;
+   border: none;
+   outline: none;
+   cursor: pointer;
+ }
+ .on {
+   color: #000;
+   font-size:50px;
+   border:none;
+ }
+ .off {
+   color: #ccc;
+   font-size:50px;
+   border:none;
+ }
+
+ .on-small {
+   color: #000;
+   font-size:20px;
+   border:none;
+ }
+ .off-small {
+   color: #ccc;
+   font-size:20px;
+   border:none;
+ }

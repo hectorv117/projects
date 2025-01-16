@@ -1,3 +1,7 @@
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 /*** includes ***/
 #include <ctype.h>
 #include <stdio.h>
@@ -28,7 +32,8 @@ enum editorKey
 
 /*** data ***/
 
-typedef struct erow{
+typedef struct erow
+{
     int size;
     char *chars;
 } erow;
@@ -39,7 +44,7 @@ struct editorConfig
     int screenrows;
     int screencols;
     int numrows;
-    erow row;
+    erow *row;
     struct termios orig_termios;
 };
 struct editorConfig E;
@@ -206,18 +211,39 @@ int getWindowSize(int *rows, int *cols)
     }
 }
 
+/*** row operations ***/
+
+void editorAppendRow(char *s, size_t len){
+    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+    int at = E.numrows;
+    E.row[at].size = len;
+    E.row[at].chars = malloc(len+1);
+    memcpy(E.row[at].chars, s, len);
+    E.row[at].chars[len] = '\0';
+    E.numrows++;
+
+
+}
 /*** file i/o ***/
 
-void editorOpen(){
-    char* line = "Hello World!";
-    ssize_t linelen = 13;
+void editorOpen(char *filename)
+{
+    FILE *fp = fopen(filename, "r");
+    if (!fp)
+        die("fopen");
 
-    E.row.size = linelen;
-    E.row.chars = malloc(linelen+1);
-    memcopy(E.row.chars, line, linelen);
-    E.row.chars[linelen] = '\0';
-    E.numrows = 1;
+    char *line = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
 
+    while  (linelen = getline(&line, &linecap, fp) != -1)
+    {
+        while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+            linelen--;
+        editorAppendRow(line, linelen);
+    }
+    free(line);
+    close(fp);
 }
 
 /*** append buffer ***/
@@ -251,12 +277,13 @@ void editorDrawRows(struct abuf *ab)
     int y;
     for (y = 0; y < E.screenrows; y++)
     {
-        if (y >= E.numrows){ 
-            if (y == E.screenrows / 3)
+        if (y >= E.numrows)
+        {
+            if (E.numrows == 0 && E.screenrows / 3)
             {
                 char welcome[80];
                 int welcomelen = snprintf(welcome, sizeof(welcome),
-                                        "Kilo editor -- version %s", KILO_VERSION);
+                                          "Kilo editor -- version %s", KILO_VERSION);
 
                 if (welcomelen > E.screencols)
                     welcomelen = E.screencols;
@@ -275,10 +302,13 @@ void editorDrawRows(struct abuf *ab)
             {
                 abAppend(ab, "~", 1);
             }
-        } else{
-            int len = E.row.size;
-            if (len > E.screencols) len = E.screencols;
-            abAppend(ab, E.row.chars, len);
+        }
+        else
+        {
+            int len = E.row[y].size;
+            if (len > E.screencols)
+                len = E.screencols;
+            abAppend(ab, E.row[y].chars, len);
         }
 
         abAppend(ab, "\x1b[K", 3);
@@ -367,7 +397,7 @@ void editorProcessKeypress()
             editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
     }
     break;
-    
+
     case ARROW_UP:
     case ARROW_DOWN:
     case ARROW_LEFT:
@@ -384,15 +414,19 @@ void initEditor()
     E.cx = 0;
     E.cy = 0;
     E.numrows = 0;
+    E.row = NULL;
     if (getWindowSize(&E.screenrows, &E.screencols) == -1)
         die("getWindowSize");
 }
 
-int main(int argc, char const *argv[])
+int main(int argc, char *argv[])
 {
     enableRawMode();
     initEditor();
-    editorOpen();
+    if (argc >= 2)
+    {
+        editorOpen(argv[1]);
+    }
     while (1)
     {
         editorRefreshScreen();

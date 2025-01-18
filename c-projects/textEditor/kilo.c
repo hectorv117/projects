@@ -16,6 +16,8 @@
 /*** defines ***/
 #define KILO_VERSION "0.0.1"
 #define CTRL_KEY(k) ((k) & 0x1f)
+#define KILO_TAB_STOP 8
+
 
 enum editorKey
 {
@@ -219,14 +221,30 @@ int getWindowSize(int *rows, int *cols)
 
 void editorUpdateRow(erow *row)
 {
+    int tabs = 0;
+    for (int i = 0; i < row->size; i++)
+    {
+        if (row->chars[i] == '\t')
+            tabs++;
+    }
     free(row->render);
-    row->render = malloc(row->size + 1);
+    row->render = malloc(row->size + tabs * (KILO_TAB_STOP-1) + 1);
 
     int idx = 0;
     for (int j = 0; j < row->size; j++)
     {
-        row->render[idx++] = row->chars[j];
+        if (row->chars[j] == '\t')
+        {
+            row->render[idx++] = ' ';
+            while (idx % KILO_TAB_STOP != 0)
+                row->render[idx++] = ' ';
+        }
+        else
+        {
+            row->render[idx++] = row->chars[j];
+        }
     }
+
     row->render[row->size] = '\0';
     row->rsize = idx;
 }

@@ -224,6 +224,15 @@ int getWindowSize(int *rows, int *cols)
 
 /*** row operations ***/
 
+void editorRowInsertChar(erow *row, int at, int c){
+    if (at < 0 || at > row->size) at = row->size;
+    row->chars = realloc(row->chars, row->size+2);
+    memmove(&row->chars[at+1], &row->chars[at], row->size - at + 1);
+    row->size++;
+    row->chars[at] = c;
+    editorUpdateRow(row);
+}
+
 int editorRowCxToRx(erow *row, int cx)
 {
     int rx = 0;
@@ -282,6 +291,9 @@ void editorAppendRow(char *s, ssize_t len)
 
     E.numrows++;
 }
+/*** editor operations ***/
+
+
 /*** file i/o ***/
 
 void editorOpen(char *filename)
@@ -585,7 +597,6 @@ void initEditor()
     E.rx = 0;
     E.rowoff = 0;
     E.coloff = 0;
-
     E.numrows = 0;
     E.row = NULL;
     E.filename = NULL;

@@ -307,6 +307,25 @@ void editorInsertChar(char c)
 }
 /*** file i/o ***/
 
+char *editorRowToString(int *buflen){
+    int totlen=0;
+    for (int j=0; j<E.numrows; j++){
+        totlen += E.row[j].size+1;
+    }
+    *buflen = totlen;
+
+    char *buf = malloc(totlen);
+    char *p = buf;
+
+    for(int j=0; j<E.numrows; j++){
+        memcpy(p, E.row[j].chars, E.row[j].size);
+        p += E.row[j].size;
+        *p = '\n';
+        p++;
+    }
+    return buf;
+}
+
 void editorOpen(char *filename)
 {
     free(E.filename);
@@ -605,7 +624,7 @@ void editorProcessKeypress()
     case ARROW_RIGHT:
         editorMoveCursor(c);
         break;
-        
+
     case CTRL_KEY('l'):
     case '\x1b':
       break;

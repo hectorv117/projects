@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdarg.h>
+#include <fcntl.h>
 #include <time.h>
 #include <termios.h>
 
@@ -225,16 +226,6 @@ int getWindowSize(int *rows, int *cols)
 
 /*** row operations ***/
 
-void editorRowInsertChar(erow *row, int at, int c)
-{
-    if (at < 0 || at > row->size)
-        at = row->size;
-    row->chars = realloc(row->chars, row->size + 2);
-    memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
-    row->size++;
-    row->chars[at] = c;
-    editorUpdateRow(row);
-}
 
 int editorRowCxToRx(erow *row, int cx)
 {
@@ -277,6 +268,17 @@ void editorUpdateRow(erow *row)
 
     row->render[row->size] = '\0';
     row->rsize = idx;
+}
+
+void editorRowInsertChar(erow *row, int at, int c)
+{
+    if (at < 0 || at > row->size)
+        at = row->size;
+    row->chars = realloc(row->chars, row->size + 2);
+    memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+    row->size++;
+    row->chars[at] = c;
+    editorUpdateRow(row);
 }
 
 void editorAppendRow(char *s, ssize_t len)
@@ -347,6 +349,17 @@ void editorOpen(char *filename)
     }
     free(line);
     close(fp);
+}
+
+void editorSave() {
+  if (E.filename == NULL) return;
+  int len;
+  char *buf = editorRowToString(&len);
+  int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+  ftruncate(fd, len);
+  write(fd, buf, len);
+  close(fd);
+  free(buf);
 }
 
 /*** append buffer ***/

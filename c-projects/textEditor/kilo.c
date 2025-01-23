@@ -22,6 +22,7 @@
 
 enum editorKey
 {
+    BACKSPACE = 127,
     ARROW_LEFT = 1000,
     ARROW_RIGHT,
     ARROW_UP,
@@ -224,10 +225,12 @@ int getWindowSize(int *rows, int *cols)
 
 /*** row operations ***/
 
-void editorRowInsertChar(erow *row, int at, int c){
-    if (at < 0 || at > row->size) at = row->size;
-    row->chars = realloc(row->chars, row->size+2);
-    memmove(&row->chars[at+1], &row->chars[at], row->size - at + 1);
+void editorRowInsertChar(erow *row, int at, int c)
+{
+    if (at < 0 || at > row->size)
+        at = row->size;
+    row->chars = realloc(row->chars, row->size + 2);
+    memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
     row->size++;
     row->chars[at] = c;
     editorUpdateRow(row);
@@ -293,7 +296,15 @@ void editorAppendRow(char *s, ssize_t len)
 }
 /*** editor operations ***/
 
-
+void editorInsertChar(char c)
+{
+    if (E.cy = E.numrows)
+    {
+        editorAppendRow("", 0);
+    }
+    editorRowInsertChar(&E.row[E.cy], E.cx, c);
+    E.cx++;
+}
 /*** file i/o ***/
 
 void editorOpen(char *filename)
@@ -345,21 +356,23 @@ void abFree(struct abuf *ab)
 
 /*** output ***/
 
-void editorDrawMessageBar(struct abuf *ab) {
-  abAppend(ab, "\x1b[K", 3);
-  int msglen = strlen(E.statusmsg);
-  if (msglen > E.screencols) msglen = E.screencols;
-  if (msglen && time(NULL) - E.statusmsg_time < 5)
-    abAppend(ab, E.statusmsg, msglen);
+void editorDrawMessageBar(struct abuf *ab)
+{
+    abAppend(ab, "\x1b[K", 3);
+    int msglen = strlen(E.statusmsg);
+    if (msglen > E.screencols)
+        msglen = E.screencols;
+    if (msglen && time(NULL) - E.statusmsg_time < 5)
+        abAppend(ab, E.statusmsg, msglen);
 }
 
-
-void editorSetStatusMessage(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap);
-  va_end(ap);
-  E.statusmsg_time = time(NULL);
+void editorSetStatusMessage(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap);
+    va_end(ap);
+    E.statusmsg_time = time(NULL);
 }
 
 void editorDrawStatusBar(struct abuf *ab)
@@ -389,7 +402,6 @@ void editorDrawStatusBar(struct abuf *ab)
     }
     abAppend(ab, "\x1b[m", 3);
     abAppend(ab, "\r\n", 2);
-
 }
 
 void editorScroll()
@@ -480,7 +492,6 @@ void editorRefreshScreen()
     editorDrawStatusBar(&ab);
     editorDrawMessageBar(&ab);
 
-
     char buf[32];
     snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, (E.rx - E.coloff) + 1);
     abAppend(&ab, buf, strlen(buf));
@@ -547,6 +558,10 @@ void editorProcessKeypress()
 
     switch (c)
     {
+    case '\r':
+        /* todo */
+        break;
+    
     case CTRL_KEY('q'):
         write(STDOUT_FILENO, "\x1b[2J", 4);
         write(STDOUT_FILENO, "\x1b[H", 3);
@@ -560,6 +575,11 @@ void editorProcessKeypress()
         printf("hereee");
         E.cx = E.screencols - 1;
         break;
+    case BACKSPACE:
+    case CTRL_KEY('h'):
+    case DEL_KEY:
+      /* TODO */
+      break;
     case PAGE_UP:
     case PAGE_DOWN:
     {
@@ -584,6 +604,14 @@ void editorProcessKeypress()
     case ARROW_LEFT:
     case ARROW_RIGHT:
         editorMoveCursor(c);
+        break;
+        
+    case CTRL_KEY('l'):
+    case '\x1b':
+      break;
+
+    default:
+        editorInsertChar(c);
         break;
     }
 }

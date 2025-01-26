@@ -61,6 +61,8 @@ struct editorConfig
     struct termios orig_termios;
 };
 struct editorConfig E;
+/*** prototypes ***/
+void editorSetStatusMessage(const char *fmt, ...);
 
 /*** terminal ***/
 
@@ -226,7 +228,6 @@ int getWindowSize(int *rows, int *cols)
 
 /*** row operations ***/
 
-
 int editorRowCxToRx(erow *row, int cx)
 {
     int rx = 0;
@@ -300,7 +301,7 @@ void editorAppendRow(char *s, ssize_t len)
 
 void editorInsertChar(char c)
 {
-    if (E.cy = E.numrows)
+    if (E.cy == E.numrows)
     {
         editorAppendRow("", 0);
     }
@@ -309,17 +310,20 @@ void editorInsertChar(char c)
 }
 /*** file i/o ***/
 
-char *editorRowToString(int *buflen){
-    int totlen=0;
-    for (int j=0; j<E.numrows; j++){
-        totlen += E.row[j].size+1;
+char *editorRowToString(int *buflen)
+{
+    int totlen = 0;
+    for (int j = 0; j < E.numrows; j++)
+    {
+        totlen += E.row[j].size + 1;
     }
     *buflen = totlen;
 
     char *buf = malloc(totlen);
     char *p = buf;
 
-    for(int j=0; j<E.numrows; j++){
+    for (int j = 0; j < E.numrows; j++)
+    {
         memcpy(p, E.row[j].chars, E.row[j].size);
         p += E.row[j].size;
         *p = '\n';
@@ -351,15 +355,29 @@ void editorOpen(char *filename)
     close(fp);
 }
 
-void editorSave() {
-  if (E.filename == NULL) return;
-  int len;
-  char *buf = editorRowToString(&len);
-  int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
-  ftruncate(fd, len);
-  write(fd, buf, len);
-  close(fd);
-  free(buf);
+void editorSave()
+{
+    if (E.filename == NULL)
+        return;
+    int len;
+    char *buf = editorRowToString(&len);
+    int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+    if (fd != -1)
+    {
+        if (ftruncate(fd, len) != -1)
+        {
+            if (write(fd, buf, len) == len)
+            {
+                close(fd);
+                free(buf);
+                editorSetStatusMessage("%d bytes written to disk", len);
+                return;
+            }
+        }
+        close(fd);
+    }
+    free(buf);
+    editorSetStatusMessage("Can't save! I/O error: %s", strerror(errno));
 }
 
 /*** append buffer ***/
@@ -388,6 +406,16 @@ void abFree(struct abuf *ab)
 
 /*** output ***/
 
+void editorSetStatusMessage(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap);
+    va_end(ap);
+    E.statusmsg_time = time(NULL);
+}
+
+
 void editorDrawMessageBar(struct abuf *ab)
 {
     abAppend(ab, "\x1b[K", 3);
@@ -396,15 +424,6 @@ void editorDrawMessageBar(struct abuf *ab)
         msglen = E.screencols;
     if (msglen && time(NULL) - E.statusmsg_time < 5)
         abAppend(ab, E.statusmsg, msglen);
-}
-
-void editorSetStatusMessage(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap);
-    va_end(ap);
-    E.statusmsg_time = time(NULL);
 }
 
 void editorDrawStatusBar(struct abuf *ab)
@@ -593,13 +612,15 @@ void editorProcessKeypress()
     case '\r':
         /* todo */
         break;
-    
+
     case CTRL_KEY('q'):
         write(STDOUT_FILENO, "\x1b[2J", 4);
         write(STDOUT_FILENO, "\x1b[H", 3);
         exit(0);
         break;
-
+    case CTRL_KEY('s'):
+        editorSave();
+        break;
     case HOME_KEY:
         E.cx = 0;
         break;
@@ -610,8 +631,8 @@ void editorProcessKeypress()
     case BACKSPACE:
     case CTRL_KEY('h'):
     case DEL_KEY:
-      /* TODO */
-      break;
+        /* TODO */
+        break;
     case PAGE_UP:
     case PAGE_DOWN:
     {
@@ -640,7 +661,7 @@ void editorProcessKeypress()
 
     case CTRL_KEY('l'):
     case '\x1b':
-      break;
+        break;
 
     default:
         editorInsertChar(c);
@@ -676,7 +697,7 @@ int main(int argc, char *argv[])
     {
         editorOpen(argv[1]);
     }
-    editorSetStatusMessage("HELP: Ctrl-Q = quit");
+    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit");
 
     while (1)
     {

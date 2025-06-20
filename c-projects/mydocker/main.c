@@ -23,6 +23,11 @@ void map_uid_gid(pid_t container_pid)
     snprintf(gid_path, sizeof(gid_path), "/proc/%d/gid_map", container_pid);
 
     int fd = open(uid_path, O_WRONLY);
+    if (fd == -1){
+        perror("open uid_path failed");
+        exit(1);
+    }
+
     char mapping[50];
 
     snprintf(mapping, sizeof(mapping), "0 %d 1", getuid());
@@ -34,6 +39,10 @@ void map_uid_gid(pid_t container_pid)
     close(fd);
 
     int fd2 = open(gid_path, O_WRONLY);
+    if (fd2 == -1){
+        perror("open gid_path failed");
+        exit(1);
+    }
     char mapping2[50];
 
     snprintf(mapping2, sizeof(mapping2), "0 %d 1", getgid());

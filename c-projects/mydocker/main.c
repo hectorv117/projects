@@ -14,7 +14,6 @@
 
 void map_uid_gid(pid_t container_pid)
 {
-
     // map container nobody uid -> host
     char uid_path[256];
     char gid_path[256];
@@ -23,7 +22,8 @@ void map_uid_gid(pid_t container_pid)
     snprintf(gid_path, sizeof(gid_path), "/proc/%d/gid_map", container_pid);
 
     int fd = open(uid_path, O_WRONLY);
-    if (fd == -1){
+    if (fd == -1)
+    {
         perror("open uid_path failed");
         exit(1);
     }
@@ -39,7 +39,8 @@ void map_uid_gid(pid_t container_pid)
     close(fd);
 
     int fd2 = open(gid_path, O_WRONLY);
-    if (fd2 == -1){
+    if (fd2 == -1)
+    {
         perror("open gid_path failed");
         exit(1);
     }
@@ -57,15 +58,20 @@ void map_uid_gid(pid_t container_pid)
 int child_ccrun(void *argv)
 {
 
+    int pipe_fd = **(int**)argv;
+    printf("pipe_fd: %u \n", pipe_fd);
+    char signal_byte;
+
+    if (read(pipe_fd, &signal_byte, 1) != 1)
+    {
+        perror("sync read failed");
+        exit(1);
+    }
+    close(pipe_fd);
+
     if (chroot(CONTAINER_ROOT) == -1)
     {
         perror("chroot failed");
-        exit(1);
-    }
-
-    if (unshare(CLONE_NEWNS) == -1)
-    {
-        perror("unshare mount namespace failed");
         exit(1);
     }
 
@@ -81,7 +87,8 @@ int child_ccrun(void *argv)
         exit(1);
     }
 
-    char **argv2 = (char **)argv;
+    char **argv2 = *((char***)argv+1);
+    printf("argv2[0]: %s\n", *argv2);
     execv(argv2[0], &argv2[0]);
     perror("execv failed");
     exit(1);
@@ -109,10 +116,19 @@ int main(int argc, char *argv[])
     }
     else
     {
-        // clone in another namespace and change hostname and run child proces
 
+        int sync_pipe[2];
+        if (pipe(sync_pipe) == -1)
+        {
+            perror("sync pipe failed");
+            return -1;
+        }
         char *stack = malloc(STACK_SIZE);
-        pid_t pid = clone(child_ccrun, stack + STACK_SIZE, CLONE_NEWUTS | CLONE_NEWPID | CLONE_NEWUSER | SIGCHLD, &argv[2]);
+
+        void *child_args[] = {&sync_pipe[0], &argv[2]};
+
+        // clone in another namespace and change hostname and run child proces
+        pid_t pid = clone(child_ccrun, stack + STACK_SIZE, CLONE_NEWUTS | CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | SIGCHLD, child_args);
         if (pid == -1)
         {
             perror("clone failed");
@@ -121,8 +137,20 @@ int main(int argc, char *argv[])
 
         map_uid_gid(pid);
 
+        char signal = 'X';
+        if (write(sync_pipe[1], &signal, 1) != 1)
+        {
+            perror("sync write failed");
+            return 1;
+        }
+
+        close(sync_pipe[0]);
+        close(sync_pipe[1]);
+
         int status;
         wait(&status);
+
+        free(stack);
 
         if (WIFEXITED(status))
         {

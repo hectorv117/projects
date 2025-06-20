@@ -17,11 +17,30 @@ void map_uid_gid(pid_t container_pid)
     // map container nobody uid -> host
     char uid_path[256];
     char gid_path[256];
+    char setgroup_path[256];
+
+    printf("calling host uid: %d\n", getuid());
+    printf("calling host gid: %d\n", getgid());
+
+    // MUST disable setgroups FIRST, before any mapping
+    snprintf(setgroup_path, sizeof(setgroup_path), "/proc/%d/setgroups", container_pid);
+    int fd = open(setgroup_path, O_WRONLY);
+    if (fd == -1)
+    {
+        perror("open setgroups failed");
+        exit(1);
+    }
+    if (write(fd, "deny", 4) == -1)
+    {
+        perror("write setgroups failed");
+        exit(1);
+    }
+    close(fd);
 
     snprintf(uid_path, sizeof(uid_path), "/proc/%d/uid_map", container_pid);
     snprintf(gid_path, sizeof(gid_path), "/proc/%d/gid_map", container_pid);
 
-    int fd = open(uid_path, O_WRONLY);
+    fd = open(uid_path, O_WRONLY);
     if (fd == -1)
     {
         perror("open uid_path failed");
@@ -58,7 +77,7 @@ void map_uid_gid(pid_t container_pid)
 int child_ccrun(void *argv)
 {
 
-    int pipe_fd = **(int**)argv;
+    int pipe_fd = **(int **)argv;
     printf("pipe_fd: %u \n", pipe_fd);
     char signal_byte;
 
@@ -87,7 +106,7 @@ int child_ccrun(void *argv)
         exit(1);
     }
 
-    char **argv2 = *((char***)argv+1);
+    char **argv2 = *((char ***)argv + 1);
     printf("argv2[0]: %s\n", *argv2);
     execv(argv2[0], &argv2[0]);
     perror("execv failed");

@@ -5,12 +5,75 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <fcntl.h>
 
 #define STACK_SIZE 65536
+#define CONTAINER_ROOT "/home/hector/rootfs"
+#define CCRUN_CGROUP_NAME "ccrun"
 
-#define CONTAINER_ROOT "/"
+void create_cgroup(char const *cgroup_name)
+{
+    // Assumes cgroups v2
+    printf("creating cgroup %s\n", cgroup_name);
+
+    char file_path[256];
+    snprintf(file_path, sizeof(file_path), "/sys/fs/cgroup/%s", cgroup_name);
+
+    struct stat st;
+    if (stat(file_path, &st) == 0)
+    {
+        printf("cgroup already exists\n");
+    }
+    else if (mkdir(file_path, 0755) == -1)
+    {
+        perror("mkdir cgroup failed");
+        exit(1);
+    }
+
+    snprintf(file_path, sizeof(file_path), "/sys/fs/cgroup/%s/memory.max", cgroup_name);
+    int fd = open(file_path, O_WRONLY);
+    if (fd == -1)
+    {
+        perror("failed to create memory.max");
+        exit(1);
+    }
+    int res = write(fd, "134217728", 9);
+    if (res == -1)
+    {
+        perror("failed to write to memory.max");
+        exit(1);
+    }
+    close(fd);
+    printf("set memory limit to 128mb\n");
+}
+
+void add_to_cgroup(const char *cgroup_name, pid_t pid)
+{
+    char file_path[256];
+    char pid_str[32];
+
+    snprintf(pid_str, sizeof(pid_str), "%d", pid);
+
+    snprintf(file_path, sizeof(file_path), "/sys/fs/cgroup/%s/cgroup.procs", cgroup_name);
+    int fd = open(file_path, O_WRONLY);
+    if (fd != -1)
+    {
+        int res = write(fd, pid_str, sizeof(pid_str));
+        if (res == -1)
+        {
+            perror("failed to write to cgroup.procs");
+            exit(1);
+        }
+        printf("added pid %s to cgroup\n", pid_str);
+        close(fd);
+        return;
+    }
+    perror("failed to open cgroup.procs\n");
+    exit(1);
+}
 
 void map_uid_gid(pid_t container_pid)
 {
@@ -19,8 +82,12 @@ void map_uid_gid(pid_t container_pid)
     char gid_path[256];
     char setgroup_path[256];
 
-    printf("calling host uid: %d\n", getuid());
-    printf("calling host gid: %d\n", getgid());
+    // default to uid/gid 1000
+    uid_t uid = getuid() == 0 ? 1000 : getuid();
+    gid_t gid = getgid() == 0 ? 1000 : getgid();
+
+    printf("calling host uid: %d\n", uid);
+    printf("calling host gid: %d\n", gid);
 
     // MUST disable setgroups FIRST, before any mapping
     snprintf(setgroup_path, sizeof(setgroup_path), "/proc/%d/setgroups", container_pid);
@@ -49,7 +116,7 @@ void map_uid_gid(pid_t container_pid)
 
     char mapping[50];
 
-    snprintf(mapping, sizeof(mapping), "0 %d 1", getuid());
+    snprintf(mapping, sizeof(mapping), "0 %d 1", uid);
     if (write(fd, mapping, strlen(mapping)) == -1)
     {
         perror("write failed");
@@ -65,7 +132,7 @@ void map_uid_gid(pid_t container_pid)
     }
     char mapping2[50];
 
-    snprintf(mapping2, sizeof(mapping2), "0 %d 1", getgid());
+    snprintf(mapping2, sizeof(mapping2), "0 %d 1", gid);
     if (write(fd2, mapping2, strlen(mapping2)) == -1)
     {
         perror("write2 failed");
@@ -78,7 +145,6 @@ int child_ccrun(void *argv)
 {
 
     int pipe_fd = **(int **)argv;
-    printf("pipe_fd: %u \n", pipe_fd);
     char signal_byte;
 
     if (read(pipe_fd, &signal_byte, 1) != 1)
@@ -91,6 +157,16 @@ int child_ccrun(void *argv)
     if (chroot(CONTAINER_ROOT) == -1)
     {
         perror("chroot failed");
+        exit(1);
+    }
+    if (setuid(0) == -1)
+    {
+        perror("setuid failed");
+        exit(1);
+    }
+    if (setgid(0) == -1)
+    {
+        perror("setgid failed");
         exit(1);
     }
 
@@ -146,6 +222,8 @@ int main(int argc, char *argv[])
 
         void *child_args[] = {&sync_pipe[0], &argv[2]};
 
+        create_cgroup(CCRUN_CGROUP_NAME);
+
         // clone in another namespace and change hostname and run child proces
         pid_t pid = clone(child_ccrun, stack + STACK_SIZE, CLONE_NEWUTS | CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | SIGCHLD, child_args);
         if (pid == -1)
@@ -154,6 +232,7 @@ int main(int argc, char *argv[])
             return 1;
         }
 
+        add_to_cgroup(CCRUN_CGROUP_NAME, pid);
         map_uid_gid(pid);
 
         char signal = 'X';

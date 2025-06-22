@@ -33,6 +33,7 @@ void create_cgroup(char const *cgroup_name)
         exit(1);
     }
 
+    // Set memory usage upper limit to 128MB
     snprintf(file_path, sizeof(file_path), "/sys/fs/cgroup/%s/memory.max", cgroup_name);
     int fd = open(file_path, O_WRONLY);
     if (fd == -1)
@@ -48,6 +49,16 @@ void create_cgroup(char const *cgroup_name)
     }
     close(fd);
     printf("set memory limit to 128mb\n");
+
+    // Set cpu usage limit to 50% of one cpu (50000 out of 100000 microseconds per period)
+    snprintf(file_path, sizeof(file_path), "/sys/fs/cgroup/%s/cpu.max", cgroup_name);
+    fd = open(file_path, O_WRONLY);
+    if (fd != -1)
+    {
+        write(fd, "50000 100000", 12);
+        close(fd);
+        printf("Set CPU limit: 50%% of one CPU\n");
+    }
 }
 
 void add_to_cgroup(const char *cgroup_name, pid_t pid)

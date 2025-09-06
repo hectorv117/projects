@@ -1,0 +1,3 @@
+[submodule "c-projects/miniproxy"]
+	path = c-projects/miniproxy
+	url = /Users/hectorvazz/projects/miniproxy/

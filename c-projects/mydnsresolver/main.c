@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <arpa/inet.h>
-
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
 #define RDBIT 0x0100
 
 typedef struct header {
@@ -138,4 +140,29 @@ int main(void){
     uint8_t dnsmBuffer[msg_len];
     serializeDNSM(&firstdnsm, dnsmBuffer);
     printbuf(dnsmBuffer, msg_len);
+
+
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+
+    struct sockaddr_in dest_addr;
+    memset(&dest_addr, 0, sizeof(dest_addr));
+
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(53);
+    inet_pton(AF_INET, "8.8.8.8", &dest_addr.sin_addr);
+
+    ssize_t sent = sendto(sockfd, dnsmBuffer, msg_len, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+    if (sent < 0){
+        perror("sendto failed...");
+    }
+
+    uint8_t recv_buffer[512];
+    struct sockaddr_in src_addr;
+
+    socklen_t src_len = sizeof(src_addr);
+    ssize_t recv_len = recvfrom(sockfd, recv_buffer, sizeof(recv_buffer), 0, (struct sockaddr*)&src_addr, &src_len);
+    close(sockfd);
+
+    printbuf(recv_buffer, recv_len);
+
 }

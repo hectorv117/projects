@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <arpa/inet.h>
@@ -31,6 +32,7 @@ typedef struct RR{
     uint32_t TTL;
     uint16_t RDLENGTH;
     unsigned char *NAME;
+    unsigned char *RDATA;
 } __attribute__((packed)) DNSRR;
 
 typedef struct dnsmessage{
@@ -83,9 +85,85 @@ void serializeDNSM(const DNSMessage *msg, uint8_t *buf){
 void printbuf(uint8_t *buf, size_t len){
     printf("priting a buf of size: %zu\n", len);
     for (int i = 0; i<len; i++){
-        printf("%02x", buf[i]);
+        printf("%02x ", buf[i]);
     }
     printf("\n");
+}
+
+unsigned char* getAnsName(uint8_t *buf , uint8_t *compressedName){
+
+
+    uint16_t bigename = (*compressedName << 8) | (*(compressedName + 1));
+    printf("compressedname: %04x\n",bigename);
+    uint16_t firstwobits = (bigename) & 0xc000;
+    printf("here\n");
+    printf("first two bits %02x\n", firstwobits);
+    if (firstwobits != 0xc000){
+        perror("compressed pointer format invalid expected first two bits to 11");
+        return NULL;
+    }
+    uint16_t offset = bigename & 0x3FFF;
+    printf("offset is: %d\n", offset);
+
+    unsigned char *domainName = malloc(128);
+    uint8_t charidx = 0;
+    uint8_t count = buf[offset++];
+    while (count!='\0'){
+        for (uint8_t i = 0; i<count; i++){
+            domainName[charidx++] = (unsigned char)buf[offset++];
+        }
+        domainName[charidx++] = '.';
+        count = buf[offset++];
+
+    }
+    domainName[--charidx]='\0';
+    printf("extracted domain name: %s\n\n", domainName);
+    return domainName;
+
+
+} 
+
+void decodeBufAnswer(uint8_t buf[], size_t len, size_t msglen){
+
+    // answer section starts after header (12B) + question (12B + size of name)
+    uint16_t numAns = (uint16_t)buf[7];
+    printf("number of answers in response: %u\n", numAns);
+    DNSRR answers[numAns];
+    
+    // create answer structs
+    size_t ansOffset = msglen;
+    for (int i = 0; i < numAns; i++){
+        printf("\nansoffset %u\n", ansOffset);
+        unsigned char *name = getAnsName(buf, &buf[ansOffset]);
+        if (name == NULL){
+            perror("error getting name from pointer");
+        }
+        answers[i].NAME = name;
+        ansOffset+=2;
+
+        answers[i].TYPE = ntohs(*(uint16_t*)&buf[ansOffset]);
+        ansOffset+=2;
+
+        answers[i].CLASS = ntohs(*(uint16_t*)&buf[ansOffset]);
+        ansOffset+=2;
+
+        answers[i].TTL = ntohs(*(uint32_t*)&buf[ansOffset]);
+        ansOffset+=4;
+
+        answers[i].RDLENGTH = ntohs(*(uint16_t*)&buf[ansOffset]);
+        ansOffset+=2;
+
+        answers[i].RDATA = malloc(answers[i].RDLENGTH);
+        memcpy(answers[i].RDATA, &buf[ansOffset], answers[i].RDLENGTH);
+        ansOffset+=answers[i].RDLENGTH;
+        printf("%u.%u.%u.%u\n", 
+        answers[i].RDATA[0],
+        answers[i].RDATA[1], 
+        answers[i].RDATA[2],
+        answers[i].RDATA[3]);
+    }
+    
+
 }
 
 void encodeName(unsigned char *name, unsigned char *buf){
@@ -163,6 +241,12 @@ int main(void){
     ssize_t recv_len = recvfrom(sockfd, recv_buffer, sizeof(recv_buffer), 0, (struct sockaddr*)&src_addr, &src_len);
     close(sockfd);
 
+
+
     printbuf(recv_buffer, recv_len);
+    printf("decoding reponse...\n");
+    decodeBufAnswer(recv_buffer, recv_len, msg_len);
+
+
 
 }

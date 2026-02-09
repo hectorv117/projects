@@ -8,6 +8,26 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+
+int sanity_done = 0;
+
+void sanity_response(int fd, struct sockaddr_in *client_addr){
+
+  printf("Sending sanity response...\n");
+  char buffer[] = "I am here";
+  int rv = sendto(fd, buffer, strlen(buffer), 0, (struct sockaddr*)client_addr, sizeof(*client_addr));
+  printf("rv: %u\n", rv);
+  if (rv == -1){
+    printf("Error sending sanity response.\n");
+    printf("Continuing anyway...\n");
+  }
+  sanity_done=1;
+
+}
+
+
+
+
 int main(int argc, char const *argv[]) {
 
   int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -40,6 +60,16 @@ int main(int argc, char const *argv[]) {
     if (n > 0) {
       printf("Received %u bytes: ", n);
       print_binary_data_buf(&buffer, n);
+
+      if (sanity_done != 1){
+        size_t sanity_str_len = strlen(SANITY_STR);
+  
+        if (strncmp(buffer, SANITY_STR, sanity_str_len)==0){
+            sanity_response(sock_fd, &client_addr);
+        }
+        continue;
+      }
+
       TTFTP_OPCODE opcode = get_opcode(buffer, n);
       printf("received opcode: %u\n", opcode);
 

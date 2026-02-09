@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+const char* SANITY_STR = "Server, are you there?";
+
+
 // 5 types of packets: ACK, DATA, RRQ, WRQ, ERROR
 typedef enum {
   RRQ = 1,

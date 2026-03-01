@@ -8,31 +8,27 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-
 int sanity_done = 0;
 
-void sanity_response(int fd, struct sockaddr_in *client_addr){
+void sanity_response(int fd, struct sockaddr_in *client_addr) {
 
   printf("Sending sanity response...\n");
   char buffer[] = "I am here";
-  int rv = sendto(fd, buffer, strlen(buffer), 0, (struct sockaddr*)client_addr, sizeof(*client_addr));
+  int rv = sendto(fd, buffer, strlen(buffer), 0, (struct sockaddr *)client_addr,
+                  sizeof(*client_addr));
   printf("rv: %u\n", rv);
-  if (rv == -1){
+  if (rv == -1) {
     printf("Error sending sanity response.\n");
     printf("Continuing anyway...\n");
   }
-  sanity_done=1;
-
+  sanity_done = 1;
 }
-
-
-
 
 int main(int argc, char const *argv[]) {
 
   int dev_mode = 0;
-  if (argc == 2){
-    if (strncmp("dev", argv[1], 3) == 0){
+  if (argc == 2) {
+    if (strncmp("dev", argv[1], 3) == 0) {
       printf("running in dev mode...\n");
       dev_mode = 1;
     }
@@ -57,7 +53,6 @@ int main(int argc, char const *argv[]) {
   struct sockaddr_in client_addr;
   socklen_t addr_len = sizeof(client_addr);
 
-
   int rrq_received = 0;
   int wrq_received = 0;
   FILE *file;
@@ -69,35 +64,34 @@ int main(int argc, char const *argv[]) {
       printf("Received %u bytes: ", n);
       print_binary_data_buf(&buffer, n);
 
-      if (dev_mode){
-        if (sanity_done != 1){
+      if (dev_mode) {
+        if (sanity_done != 1) {
           size_t sanity_str_len = strlen(SANITY_STR);
-    
-          if (strncmp(buffer, SANITY_STR, sanity_str_len)==0){
-              sanity_response(sock_fd, &client_addr);
+
+          if (strncmp(buffer, SANITY_STR, sanity_str_len) == 0) {
+            sanity_response(sock_fd, &client_addr);
           }
           continue;
         }
-      }  
+      }
 
       TTFTP_OPCODE opcode = get_opcode(buffer, n);
       printf("received opcode: %u\n", opcode);
 
-
       void *packet = malloc(n);
       deserialize(buffer, n, packet, opcode);
-      // Initial RRQ 
-      if (!rrq_received && opcode == RRQ){
+      // Initial RRQ
+      if (!rrq_received && opcode == RRQ) {
         rrq_received = 1;
-        TTFTP_RQ rrq = *(TTFTP_RQ*)packet;
+        TTFTP_RQ rrq = *(TTFTP_RQ *)packet;
         file = fopen(rrq.filename, "r");
-        if (file == NULL){
-            perror("RRQ: ");
-            free(packet);
-            continue;
+        if (file == NULL) {
+          perror("RRQ: ");
+          free(packet);
+          continue;
         }
         printf("requested file exists, sending ack...\n");
-        //send ack
+        // send ack
         send_ack(sock_fd, 0, &client_addr);
 
         // begin sending file in 512B blocks
@@ -108,21 +102,24 @@ int main(int argc, char const *argv[]) {
 
         printf("sending packets...\n");
         // continously send 512B blocks
-        while ((num_bytes_read = fread(file_buffer, 1, 512, file)) == 512){
-            send_data(sock_fd, file_buffer, num_bytes_read, block_number, &client_addr);
-            // wait for ack
+        while ((num_bytes_read = fread(file_buffer, 1, 512, file)) == 512) {
+          send_data(sock_fd, file_buffer, num_bytes_read, block_number,
+                    &client_addr);
+          // wait for ack
+          block_number++;
         }
 
-        if (num_bytes_read == 0){
-            printf("EOF or error\n");
+        if (num_bytes_read == 0) {
+          printf("EOF or error\n");
         }
 
         // send last block < 512
-        if (num_bytes_read > 0){
-            printf("sending final data block\n");
-            send_data(sock_fd, file_buffer, num_bytes_read, block_number, &client_addr);
-            // wait for ack
-            rrq_received = 0;
+        if (num_bytes_read > 0) {
+          printf("sending final data block\n");
+          send_data(sock_fd, file_buffer, num_bytes_read, block_number,
+                    &client_addr);
+          // wait for ack
+          rrq_received = 0;
         }
       }
     }

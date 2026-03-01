@@ -87,9 +87,10 @@ void deserialize(uint8_t *buf, size_t packet_size, void *packet,
 
   } else if (opcode == DATA) {
     TTFTP_DATA *data = (TTFTP_DATA *)packet;
-    memcpy(data, buf, sizeof(TTFTP_DATA));
     data->opcode = ntohs(data->opcode);
     data->block = ntohs(data->block);
+    memcpy(data->data, buf+4, packet_size-4);
+    memcpy(packet, data, packet_size);
     return;
 
   } else if (opcode == RRQ || opcode == WRQ) {

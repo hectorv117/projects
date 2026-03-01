@@ -11,4 +11,4 @@ client: client.c
 	clang client.c -o client
 
 clean:
-	-rm -f *.o $(objects) test client server
+	-rm -f *.o $(objects) test client server client_test.txt client_binary_test

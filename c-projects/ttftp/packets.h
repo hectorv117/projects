@@ -4,9 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 
-const char* SANITY_STR = "Server, are you there?";
-
+const char *SANITY_STR = "Server, are you there?";
 
 // 5 types of packets: ACK, DATA, RRQ, WRQ, ERROR
 typedef enum {
@@ -80,7 +80,7 @@ void deserialize(uint8_t *buf, size_t packet_size, void *packet,
   printf("deserializing...\n");
   if (opcode == ACK) {
     TTFTP_ACK *ack = (TTFTP_ACK *)packet;
-    memcpy(ack, buf, sizeof(TTFTP_ACK));
+    memcpy(ack, buf, packet_size);
     ack->opcode = ntohs(ack->opcode);
     ack->block_number = ntohs(ack->block_number);
     return;
@@ -89,7 +89,7 @@ void deserialize(uint8_t *buf, size_t packet_size, void *packet,
     TTFTP_DATA *data = (TTFTP_DATA *)packet;
     data->opcode = ntohs(data->opcode);
     data->block = ntohs(data->block);
-    memcpy(data->data, buf+4, packet_size-4);
+    memcpy(data->data, buf + 4, packet_size - 4);
     memcpy(packet, data, packet_size);
     return;
 
@@ -126,20 +126,39 @@ void deserialize(uint8_t *buf, size_t packet_size, void *packet,
 
 int send_ack(int fd, uint16_t block_number, struct sockaddr_in *sock_addr) {
 
-    TTFTP_ACK ack = {
-        .opcode = htons(ACK),
-        .block_number = htons(block_number),
-    };
+  TTFTP_ACK ack = {
+      .opcode = htons(ACK),
+      .block_number = htons(block_number),
+  };
 
-    printf("sending ack for block num %u\n", block_number);
+  printf("sending ack for block num %u\n", block_number);
 
-    int rv = sendto(fd, (uint8_t *)&ack, sizeof(ack), 0,
-                    (struct sockaddr *)sock_addr, sizeof(*sock_addr));
-    if (rv != 4) {
-        fprintf(stderr, "failed to send ack for block number: %u\n", block_number);
-        return 1;
-    }
-    return 0;
+  int rv = sendto(fd, (uint8_t *)&ack, sizeof(ack), 0,
+                  (struct sockaddr *)sock_addr, sizeof(*sock_addr));
+  if (rv != 4) {
+    fprintf(stderr, "failed to send ack for block number: %u\n", block_number);
+    return 1;
+  }
+  return 0;
+}
+
+int receive_ack(int fd, uint16_t expected_block_number,
+                struct sockaddr_in *sock_addr, uint16_t *ack_buf) {
+  socklen_t addr_len = sizeof(*sock_addr);
+  int n = recvfrom(fd, ack_buf, sizeof(TTFTP_ACK), 0,
+                   (struct sockaddr *)sock_addr, &addr_len);
+  TTFTP_ACK ack = *(TTFTP_ACK *)ack_buf;
+  if (ntohs(ack.opcode) != ACK) {
+    fprintf(stderr, "Invalid ACK opcode\n");
+    return 1;
+  }
+  int received_block_number = ntohs(ack.block_number);
+  if (received_block_number != expected_block_number) {
+    fprintf(stderr, "Wrong ACK block number. Expected: %u got %u\n",
+            expected_block_number, received_block_number);
+    return 1;
+  }
+  return 0;
 }
 
 int send_rq(int fd, const char *filename, TTFTP_OPCODE opcode,
@@ -165,7 +184,7 @@ int send_rq(int fd, const char *filename, TTFTP_OPCODE opcode,
   printf("sending %s for file name: %s\n", opcode_to_string(opcode), filename);
   int rv = sendto(fd, buf, offset, 0, (struct sockaddr *)sock_addr,
                   sizeof(*sock_addr));
-  if (rv == -1 ) {
+  if (rv == -1) {
     fprintf(stderr, "failed to send %s for file name: %s\n",
             opcode_to_string(opcode), filename);
     return 1;
@@ -173,20 +192,20 @@ int send_rq(int fd, const char *filename, TTFTP_OPCODE opcode,
   return 0;
 }
 
-
-void send_data(int fd, uint8_t *bytes_read, size_t num_bytes_read, uint16_t block_number, struct sockaddr_in *sock_addr){
-    TTFTP_DATA data = {
-        .opcode = htons(DATA),
-        .block = htons(block_number),
-    };
-    memcpy(data.data, bytes_read, num_bytes_read);
-    printf("sending block %zu with %zu bytes...\n", block_number, num_bytes_read);
-    int offset = 2+2+num_bytes_read;
-    int rv = sendto(fd, (uint8_t*)&data, offset, 0, (struct sockaddr *)sock_addr,
+void send_data(int fd, uint8_t *bytes_read, size_t num_bytes_read,
+               uint16_t block_number, struct sockaddr_in *sock_addr) {
+  TTFTP_DATA data = {
+      .opcode = htons(DATA),
+      .block = htons(block_number),
+  };
+  memcpy(data.data, bytes_read, num_bytes_read);
+  printf("sending block %zu with %zu bytes...\n", block_number, num_bytes_read);
+  int offset = 2 + 2 + num_bytes_read;
+  int rv = sendto(fd, (uint8_t *)&data, offset, 0, (struct sockaddr *)sock_addr,
                   sizeof(*sock_addr));
-    if (rv <= 0){
-      perror("failed to send block data\n");
-      exit(1);
-    }
-    printf("Sent data!\n");
+  if (rv <= 0) {
+    perror("failed to send block data\n");
+    exit(1);
+  }
+  printf("Sent data!\n");
 }

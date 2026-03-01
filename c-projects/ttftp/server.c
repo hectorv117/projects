@@ -99,18 +99,27 @@ int main(int argc, char const *argv[]) {
         uint8_t file_buffer[512];
         size_t num_bytes_read;
         uint16_t block_number = 1;
+        uint16_t ack_buf[2];
+        long total_bytes_sent = 0;
 
-        printf("sending packets...\n");
+        // printf("sending packets...\n");
         // continously send 512B blocks
         while ((num_bytes_read = fread(file_buffer, 1, 512, file)) == 512) {
           send_data(sock_fd, file_buffer, num_bytes_read, block_number,
                     &client_addr);
+          total_bytes_sent += num_bytes_read;
           // wait for ack
+          if (receive_ack(sock_fd, block_number, &client_addr, ack_buf) != 0) {
+            printf("Failed to receive ACK %u from client\n", block_number);
+            return 1;
+          }
           block_number++;
         }
 
         if (num_bytes_read == 0) {
           printf("EOF or error\n");
+          printf("total bytes sent: %zu\n", total_bytes_sent);
+          rrq_received = 0;
         }
 
         // send last block < 512
@@ -119,6 +128,10 @@ int main(int argc, char const *argv[]) {
           send_data(sock_fd, file_buffer, num_bytes_read, block_number,
                     &client_addr);
           // wait for ack
+          printf("waiting for ack %u\n", block_number);
+          if (receive_ack(sock_fd, block_number, &client_addr, ack_buf) != 0) {
+            printf("Failed to receive ACK %u from client\n", block_number);
+          }
           rrq_received = 0;
         }
       }

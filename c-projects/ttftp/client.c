@@ -32,22 +32,24 @@ int main(int arc, char **argv) {
 
   // wait for ack 0 response from server
 
-  uint8_t ack_buf[4];
-  int n = recvfrom(sockfd, ack_buf, sizeof(ack_buf), 0,
-                   (struct sockaddr *)&from_addr, &addr_len);
-  //   printf("Received %u bytes from server\n", n);
-  TTFTP_ACK ack_zero = *(TTFTP_ACK *)&ack_buf;
-  if (ntohs(ack_zero.opcode) != ACK || ack_zero.block_number != 0) {
-    fprintf(stderr, "ack zero wasn't received from server\n");
+  uint16_t ack_buf[2];
+  if (receive_ack(sockfd, 0, &from_addr, ack_buf) != 0) {
+    printf("Failed to receive ACK 0 from server\n");
     return 1;
   }
 
   // waiting for data packets
   printf("waiting for data packets..\n");
+  int n;
   uint8_t data_buf[516];
   FILE *file = NULL;
   char client_file_name[100] = "client_";
   strncat(client_file_name, file_name, 50);
+  int blocks_written = 0;
+  long total_bytes_written = 0;
+
+  struct timeval tv = {.tv_sec = 2, .tv_usec = 0};
+  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
   while ((n = recvfrom(sockfd, data_buf, sizeof(data_buf), 0,
                        (struct sockaddr *)&from_addr, &addr_len)) > 0) {
@@ -59,32 +61,40 @@ int main(int arc, char **argv) {
 
     if (get_opcode((uint16_t *)data_buf, n) == DATA) {
 
-        printf("Data packet received\n");
-        TTFTP_DATA *data_packet = (TTFTP_DATA*)data_buf;
-        print_binary_data_buf((uint8_t *)data_packet, n);
+      TTFTP_DATA *data_packet = (TTFTP_DATA *)data_buf;
+      int received_block_number = ntohs(data_packet->block);
+      printf("Data packet %u received\n", received_block_number);
+      // print_binary_data_buf((uint8_t *)data_packet, n);
+
+      if (file == NULL) {
+        file = fopen(client_file_name, "wb");
+
         if (file == NULL) {
-            file = fopen(client_file_name, "w");
-
-            if (file == NULL) {
-            printf("Error opening file\n");
-            return -1;
-            }
+          printf("Error opening file\n");
+          return -1;
         }
+      }
 
-        printf("writing...\n");
-        if (fwrite(data_packet->data , 1, n - 4, file) == n - 4) {
-            printf("wrote %u bytes!\n", n-4);
-            if (n - 4 < 512){
-                printf("less than 512 bytes\n");
-                break;
-            }
-        } else {
-
-            perror("Error writing to file");
-            fclose(file);
-            return 1;
+      printf("writing...\n");
+      if (fwrite(data_packet->data, 1, n - 4, file) == n - 4) {
+        printf("wrote %u bytes!\n", n - 4);
+        total_bytes_written += n - 4;
+        blocks_written++;
+        send_ack(sockfd, received_block_number, &server_addr);
+        if (n - 4 < 512) {
+          printf("less than 512 bytes\n");
+          fflush(file);
+          break;
         }
+      } else {
+
+        perror("Error writing to file");
+        fclose(file);
+        return 1;
+      }
     }
+    printf("total blocks written: %u\n", blocks_written);
+    printf("total bytes written: %zu\n", total_bytes_written);
   }
 
   fclose(file);

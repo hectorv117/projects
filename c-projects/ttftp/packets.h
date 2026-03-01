@@ -173,7 +173,7 @@ int send_rq(int fd, const char *filename, TTFTP_OPCODE opcode,
 }
 
 
-int send_data(int fd, uint8_t *bytes_read, size_t num_bytes_read, size_t block_number, struct sockaddr_in *sock_addr){
+void send_data(int fd, uint8_t *bytes_read, size_t num_bytes_read, uint16_t block_number, struct sockaddr_in *sock_addr){
     TTFTP_DATA data = {
         .opcode = htons(DATA),
         .block = htons(block_number),
@@ -183,4 +183,9 @@ int send_data(int fd, uint8_t *bytes_read, size_t num_bytes_read, size_t block_n
     int offset = 2+2+num_bytes_read;
     int rv = sendto(fd, (uint8_t*)&data, offset, 0, (struct sockaddr *)sock_addr,
                   sizeof(*sock_addr));
+    if (rv <= 0){
+      perror("failed to send block data\n");
+      exit(1);
+    }
+    printf("Sent data!\n");
 }

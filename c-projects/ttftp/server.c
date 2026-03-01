@@ -30,6 +30,14 @@ void sanity_response(int fd, struct sockaddr_in *client_addr){
 
 int main(int argc, char const *argv[]) {
 
+  int dev_mode = 0;
+  if (argc == 2){
+    if (strncmp("dev", argv[1], 3) == 0){
+      printf("running in dev mode...\n");
+      dev_mode = 1;
+    }
+  }
+
   int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (sock_fd == -1) {
     perror("Failed to create UDP socket");
@@ -61,14 +69,16 @@ int main(int argc, char const *argv[]) {
       printf("Received %u bytes: ", n);
       print_binary_data_buf(&buffer, n);
 
-      if (sanity_done != 1){
-        size_t sanity_str_len = strlen(SANITY_STR);
-  
-        if (strncmp(buffer, SANITY_STR, sanity_str_len)==0){
-            sanity_response(sock_fd, &client_addr);
+      if (dev_mode){
+        if (sanity_done != 1){
+          size_t sanity_str_len = strlen(SANITY_STR);
+    
+          if (strncmp(buffer, SANITY_STR, sanity_str_len)==0){
+              sanity_response(sock_fd, &client_addr);
+          }
+          continue;
         }
-        continue;
-      }
+      }  
 
       TTFTP_OPCODE opcode = get_opcode(buffer, n);
       printf("received opcode: %u\n", opcode);
@@ -94,11 +104,11 @@ int main(int argc, char const *argv[]) {
 
         uint8_t file_buffer[512];
         size_t num_bytes_read;
-        int block_number = 1;
+        uint16_t block_number = 1;
 
         printf("sending packets...\n");
         // continously send 512B blocks
-        while ((num_bytes_read = fread(buffer, 1, 512, file)) == 512){
+        while ((num_bytes_read = fread(file_buffer, 1, 512, file)) == 512){
             send_data(sock_fd, file_buffer, num_bytes_read, block_number, &client_addr);
             // wait for ack
         }
@@ -112,6 +122,7 @@ int main(int argc, char const *argv[]) {
             printf("sending final data block\n");
             send_data(sock_fd, file_buffer, num_bytes_read, block_number, &client_addr);
             // wait for ack
+            rrq_received = 0;
         }
       }
     }

@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -8,6 +9,10 @@
 
 
 int main(int arc, char **argv){
+
+    char file_name[50];
+    printf("Enter the name of the file: ");
+    scanf("%s", file_name);
 
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -21,7 +26,7 @@ int main(int arc, char **argv){
     socklen_t addr_len = sizeof(from_addr);
 
     // int rv = send_ack(sockfd, 0, &server_addr);
-    int rv = send_rq(sockfd, "test.txt", RRQ, &server_addr);    
+    int rv = send_rq(sockfd, file_name, RRQ, &server_addr);    
     printf("sent packet? return value: %u\n", rv);
     if (rv != 0) return 1;
 
@@ -40,7 +45,27 @@ int main(int arc, char **argv){
     printf("waiting for data packets..\n");
     uint8_t data_buf[516];
     n = recvfrom(sockfd, data_buf, sizeof(data_buf), 0, (struct sockaddr*)&from_addr, &addr_len);
+    
+    if (n > 0) printf("recieved %u bytes\n", n);
+    print_binary_data_buf(data_buf, n);
 
+    printf("writing...\n");
+    FILE *file;
+    //file = fopen(file_name, "w");
+    file = fopen("test_client.txt", "w");
+
+    if (file == NULL){
+        printf("Error opening file\n");
+        return -1;
+    }
+
+    if (fwrite(data_buf, 1, n, file)!= n){
+        perror("Error writing file");
+        fclose(file);
+        return 1;
+    }
+    fclose(file);
+    printf("done!\n");
 
     return 0;
 

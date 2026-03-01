@@ -1,3 +1,5 @@
+.PHONY: clean all
+all: test server client
 
 test: test.c
 	clang test.c -o test
@@ -8,6 +10,5 @@ server: server.c
 client: client.c
 	clang client.c -o client
 
-.PHONY: clean
 clean:
 	-rm -f *.o $(objects) test client server
